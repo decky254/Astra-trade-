@@ -1,18 +1,24 @@
-import React, { useState, useEffect, FormEvent } from 'react';
+import React, { useState } from 'react';
 import { 
-  TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, 
-  RefreshCw, MoreHorizontal, Home, BarChart2, Activity, Briefcase, 
-  Menu, Bell, Smartphone, CheckCircle2, XCircle, ChevronRight, Search, Loader2
+  TrendingUp, 
+  Wallet, 
+  ArrowUpRight, 
+  ArrowDownLeft, 
+  RefreshCw, 
+  MoreHorizontal, 
+  Home, 
+  BarChart2, 
+  Activity, 
+  User, 
+  Clock, 
+  AlertCircle, 
+  X, 
+  Smartphone, 
+  CheckCircle2, 
+  ChevronRight 
 } from 'lucide-react';
 
-// --- TYPE DEFINITIONS (From Screenshot_20260601-103326.png) ---
-interface AccountState {
-  portfolioValue: number;
-  allTimeProfit: number;
-  allTimeProfitPercent: number;
-  simulatedBuyingPower: number;
-}
-
+// --- TYPE DEFINITIONS ---
 interface MarketAsset {
   symbol: string;
   name: string;
@@ -26,270 +32,312 @@ interface HistoryItem {
   type: 'CALL' | 'PUT';
   stake: number;
   payout: number;
-  status: 'WON' | 'EXPIRED';
+  status: 'CONTRACT WON' | 'SETTLED LOSS' | 'CAPPED WIN';
   date: string;
 }
 
-interface FinanceModal {
-  isOpen: boolean;
-  type: 'deposit' | 'withdraw' | null;
-}
+export default function App() {
+  const [activeTab, setActiveTab] = useState<'home' | 'market' | 'trade' | 'portfolio' | 'more'>('home');
+  const [portfolioTab, setPortfolioTab] = useState<'holdings' | 'allocation' | 'pnl' | 'history'>('history');
+  const [showMpesa, setShowMpesa] = useState(false);
+  const [wagerAmount, setWagerAmount] = useState<number>(1000);
+  const [mpesaError, setMpesaError] = useState<string | null>(
+    "Failed to execute 'fetch' on 'Window': Failed to parse URL from backend configuration sync string."
+  );
 
-// Global API anchor for your system 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://api.astratrade.co/api';
+  // --- HARDCODED APP STATE DATA ---
+  const walletBalance = 93943.56;
+  const portfolioNetValue = 2037.00;
+  const portfolioProfitAllTime = 15420.40;
+  const portfolioProfitPercent = 6.54;
 
-export default function AstraTradeTerminal() {
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<'home' | 'market' | 'trade' | 'portfolio'>('home');
-  
-  // Custom states for M-Pesa Processing Mechanics
-  const [financeModal, setFinanceModal] = useState<FinanceModal>({ isOpen: false, type: null });
-  const [phoneNumber, setPhoneNumber] = useState<string>('2547');
-  const [transactionAmount, setTransactionAmount] = useState<string>('');
-  
-  // Precise typing for live transaction cycle states
-  const [stkStatus, setStkStatus] = useState<'idle' | 'sending_stk' | 'awaiting_pin' | 'success' | 'failed'>('idle');
-  const [errorMessage, setErrorMessage] = useState<string>('');
+  const markets: MarketAsset[] = [
+    { symbol: 'SCOM', name: 'Safaricom PLC • NSE', price: 18.85, change: 1.35, up: true },
+    { symbol: 'EQTY', name: 'Equity Group Holdings • NSE', price: 39.50, change: -0.85, up: false },
+    { symbol: 'V75', name: 'Volatility 75 Index', price: 145230.40, change: 4.22, up: true },
+    { symbol: 'V1S', name: 'Volatility 1s Index', price: 285.15, change: 0.12, up: true }
+  ];
 
-  // Hydrated state tracking your financial records
-  const [account, setAccount] = useState<AccountState>({
-    portfolioValue: 93943.56,
-    allTimeProfit: 15420.40,
-    allTimeProfitPercent: 6.54,
-    simulatedBuyingPower: 2500.00
-  });
+  const historicalContracts: HistoryItem[] = [
+    { asset: 'SCOM', type: 'CALL', stake: 1000, payout: 3200, status: 'CONTRACT WON', date: '31 May 2026, 09:08:00' },
+    { asset: 'EQTY', type: 'PUT', stake: 500, payout: 0, status: 'SETTLED LOSS', date: '31 May 2026, 08:45:00' },
+    { asset: 'SCOM', type: 'CALL', stake: 2000, payout: 5000, status: 'CAPPED WIN', date: '31 May 2026, 08:12:00' }
+  ];
 
-  // Fetch balance profile on startup
-  useEffect(() => {
-    async function fetchBalances() {
-      try {
-        const res = await fetch(`${API_BASE_URL}/account/summary`);
-        if (res.ok) {
-          const data: AccountState = await res.json();
-          setAccount(data);
-        }
-      } catch (err) {
-        console.warn("Backend node offline. Running local state engines.");
-      }
-    }
-    fetchBalances();
-  }, []);
-
-  // --- M-PESA LIVE STK PUSH HOOK ROUTINE ---
-  const handleMPesaSTKPush = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setErrorMessage('');
-    setStkStatus('sending_stk');
-
-    // Clean data typing for network transfer packages
-    const cleanPhone = phoneNumber.trim();
-    const cleanAmount = parseFloat(transactionAmount);
-
-    if (!cleanPhone.startsWith('254') || cleanPhone.length !== 12) {
-      setStkStatus('failed');
-      setErrorMessage('Phone number format must be exactly 2547XXXXXXXX');
-      return;
-    }
-
-    if (isNaN(cleanAmount) || cleanAmount < 10) {
-      setStkStatus('failed');
-      setErrorMessage('Minimum transactional threshold is KSh 10');
-      return;
-    }
-
+  // --- SAFE BACKEND URL INTEGRATION ---
+  const triggerStkPush = async () => {
     try {
-      // Direct integration handshake payload to Daraja wrapper backend
-      const response = await fetch(`${API_BASE_URL}/payments/stk-push`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone, amount: cleanAmount })
-      });
-
-      if (!response.ok) {
-        throw new Error('Daraja API network handshake rejected.');
-      }
-
-      // Backend confirmed STK prompt successfully dispatched to mobile handset
-      setStkStatus('awaiting_pin');
-
-      // Begin checking with backend if user has inserted PIN
-      startPollingTransaction(cleanPhone);
-
-    } catch (err) {
-      setStkStatus('failed');
-      setErrorMessage(err instanceof Error ? err.message : 'STK Gateway Timeout.');
+      setMpesaError(null);
+      // Clean target string layout without markdown link wrappers
+      const backendUrl = "https://your-daraja-backend.up.railway.app/payments/stk-push";
+      const response = await fetch(backendUrl, { method: 'POST' });
+      if (!response.ok) throw new Error("Handshake Interrupted");
+    } catch (err: any) {
+      setMpesaError("Failed to execute 'fetch' on 'Window': Failed to resolve system handshake at https://your-daraja-backend.up.railway.app/payments/stk-push");
     }
-  };
-
-  // Optional routine to poll backend until transaction resolves
-  const startPollingTransaction = (phone: string) => {
-    let checkCount = 0;
-    const interval = setInterval(async () => {
-      checkCount++;
-      try {
-        const checkRes = await fetch(`${API_BASE_URL}/payments/status?phone=${phone}`);
-        if (checkRes.ok) {
-          const statusData = await checkRes.json();
-          if (statusData.status === 'COMPLETED') {
-            clearInterval(interval);
-            setStkStatus('success');
-            setAccount(prev => ({
-              ...prev,
-              portfolioValue: prev.portfolioValue + parseFloat(transactionAmount)
-            }));
-          } else if (statusData.status === 'FAILED') {
-            clearInterval(interval);
-            setStkStatus('failed');
-            setErrorMessage('Transaction canceled or insufficient funds.');
-          }
-        }
-      } catch (e) { /* silent catch while polling */ }
-
-      // Timeout safety break after 30 seconds of waiting
-      if (checkCount > 10) {
-        clearInterval(interval);
-        setStkStatus('success'); // Fallback visually for design demonstration
-      }
-    }, 3000);
   };
 
   return (
-    <div className="min-h-screen bg-[#060814] text-slate-100 font-sans antialiased pb-28">
-      {/* HEADER BAR */}
-      <header className="sticky top-0 z-40 bg-[#060814]/90 backdrop-blur-md border-b border-slate-900 px-4 py-3.5 flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <div className="bg-indigo-600 p-2 rounded-xl"><Activity className="w-5 h-5 text-white" /></div>
-          <div>
-            <h1 className="text-md font-bold text-white">Astra Trade</h1>
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider">Secure Trading Hub</p>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-white font-sans max-w-md mx-auto relative pb-24 border-x border-slate-900 shadow-2xl">
+      
+      {/* GLOBAL HEADER HEADER BAR */}
+      <header className="p-4 border-b border-slate-900 bg-slate-950/80 backdrop-blur sticky top-0 z-40 flex justify-between items-center">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-white">Astra Trade</h1>
+          <p className="text-[10px] text-indigo-400 font-mono tracking-widest uppercase">Secure Trading Hub</p>
         </div>
-        <div className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-xs font-mono font-bold text-indigo-400">DT</div>
+        <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400 text-sm">
+          DT
+        </div>
       </header>
 
-      {/* CORE FRAME LAYOUT */}
-      <main className="max-w-md mx-auto px-4 pt-4">
+      {/* RENDER ACTIVE ROUTE DASHBOARDS */}
+      <main className="p-4 space-y-4">
+        
+        {/* TAB 1: HOME VIEW */}
         {activeTab === 'home' && (
-          <div className="space-y-5">
-            {/* VALUE BANNER CARD */}
-            <div className="bg-gradient-to-b from-[#0b0f26] to-[#070a1e] border border-slate-900 rounded-3xl p-5 shadow-2xl">
-              <p className="text-[11px] text-slate-400 uppercase tracking-wider">Net Account Asset Valuation</p>
-              <h2 className="text-3xl font-extrabold text-white mt-1 font-mono tracking-tight">
-                KSh {account.portfolioValue.toLocaleString()}
-              </h2>
-              <div className="flex items-center space-x-1.5 mt-1 text-emerald-400 text-xs font-bold">
-                <TrendingUp className="w-3.5 h-3.5" />
-                <span>+KSh {account.allTimeProfit.toLocaleString()} ({account.allTimeProfitPercent}%)</span>
+          <div className="space-y-4 animate-fadeIn">
+            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-6 rounded-2xl border border-indigo-500/10 space-y-4 relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-2xl" />
+              <div className="flex justify-between items-center text-slate-400 text-xs">
+                <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> M-Pesa Integrated Float Balance</span>
+                <RefreshCw className="w-3.5 h-3.5 hover:rotate-180 transition-transform cursor-pointer" />
               </div>
-              
-              <div className="grid grid-cols-2 gap-3 mt-6">
-                <button onClick={() => setFinanceModal({ isOpen: true, type: 'deposit' })} className="flex items-center justify-center space-x-2 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-indigo-600/20">
-                  <ArrowDownLeft className="w-4 h-4" /> <span>Deposit</span>
+              <h2 className="text-3xl font-extrabold tracking-tight">KSh {walletBalance.toLocaleString()}</h2>
+              <div className="grid grid-cols-2 gap-3 pt-2">
+                <button onClick={() => setShowMpesa(true)} className="flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-xl text-xs font-semibold transition-all shadow-lg shadow-indigo-600/20">
+                  <ArrowUpRight className="w-4 h-4" /> Deposit
                 </button>
-                <button onClick={() => setFinanceModal({ isOpen: true, type: 'withdraw' })} className="flex items-center justify-center space-x-2 py-3.5 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-850 text-white text-xs font-black uppercase tracking-wider transition-all">
-                  <ArrowUpRight className="w-4 h-4" /> <span>Withdraw</span>
+                <button onClick={() => setShowMpesa(true)} className="flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold transition-all">
+                  <ArrowDownLeft className="w-4 h-4" /> Withdraw
                 </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <p className="text-[11px] text-slate-400">System Engines</p>
+                <p className="text-sm font-bold text-emerald-400 mt-1 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Operational
+                </p>
+              </div>
+              <div className="bg-slate-900 p-4 rounded-xl border border-slate-800">
+                <p className="text-[11px] text-slate-400">Active Pipeline</p>
+                <p className="text-sm font-bold mt-1 font-mono text-indigo-400">NODE BUILD V2.1</p>
               </div>
             </div>
           </div>
         )}
 
-        {activeTab !== 'home' && (
-          <div className="flex flex-col items-center justify-center py-20 text-center text-slate-500">
-            <Activity className="w-8 h-8 mb-2 animate-pulse text-indigo-500" />
-            <p className="text-xs font-bold uppercase tracking-widest">{activeTab} system operational</p>
+        {/* TAB 2: MARKET MATRIX */}
+        {activeTab === 'market' && (
+          <div className="space-y-3 animate-fadeIn">
+            <h3 className="text-sm font-bold text-slate-400 px-1 uppercase tracking-wider">Market Price Matrix</h3>
+            <div className="space-y-2">
+              {markets.map((asset) => (
+                <div key={asset.symbol} onClick={() => setActiveTab('trade')} className="bg-slate-900 p-4 rounded-xl border border-slate-800 hover:border-indigo-500/30 transition-all flex justify-between items-center cursor-pointer">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold tracking-wide">{asset.symbol}</span>
+                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase font-mono">
+                        {asset.symbol.startsWith('V') ? 'Synthetic' : 'NSE Equity'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">{asset.name}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-mono font-bold">{asset.price.toLocaleString()}</p>
+                    <p className={`text-xs font-medium mt-0.5 ${asset.up ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {asset.up ? '+' : ''}{asset.change}%
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-      </main>
 
-      {/* OPERATIONAL M-PESA OVERLAY MODAL */}
-      {financeModal.isOpen && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end justify-center transition-all animate-fadeIn">
-          <div className="bg-[#0b0f26] border-t border-slate-800 rounded-t-3xl w-full max-w-md p-6 space-y-5 shadow-2xl">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-black text-white uppercase tracking-wider flex items-center">
-                <Smartphone className="w-4 h-4 mr-2 text-emerald-400" /> M-Pesa Interfacing Terminal
-              </h3>
-              <button 
-                onClick={() => { setFinanceModal({ isOpen: false, type: null }); setStkStatus('idle'); }} 
-                className="text-slate-500 hover:text-white text-xs uppercase font-bold tracking-wider transition"
-              >
-                Close
+        {/* TAB 3: TRADING WORKBENCH */}
+        {activeTab === 'trade' && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="flex justify-between items-center bg-slate-900 p-3 rounded-xl border border-slate-800">
+              <div>
+                <span className="text-xs font-bold text-indigo-400">SCOM</span>
+                <p className="text-[10px] text-slate-500">Safaricom PLC • NSE Price Matrix</p>
+              </div>
+              <span className="text-xs font-mono font-bold bg-indigo-500/10 text-indigo-400 px-2.5 py-1 rounded-lg border border-indigo-500/20 uppercase tracking-widest">
+                Synthetic Engine
+              </span>
+            </div>
+
+            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800 grid grid-cols-2 text-center text-xs font-semibold">
+              <button className="py-2.5 rounded-lg bg-slate-800 text-slate-400">Asset Purchase</button>
+              <button className="py-2.5 rounded-lg bg-indigo-600 text-white shadow-md">Binary Predict</button>
+            </div>
+
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+              <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider block">Wager Stake Amount</label>
+              <div className="relative">
+                <input 
+                  type="number" 
+                  value={wagerAmount} 
+                  onChange={(e) => setWagerAmount(Number(e.target.value))}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3.5 px-4 text-xl font-bold font-mono focus:outline-none focus:border-indigo-500 text-white"
+                />
+                <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-sm">KES</span>
+              </div>
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                {[1000, 5000, 10000].map((amt) => (
+                  <button key={amt} onClick={() => setWagerAmount(amt)} className={`py-2 rounded-lg text-xs font-mono font-bold transition-all ${wagerAmount === amt ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/40' : 'bg-slate-950 text-slate-400 border border-slate-800'}`}>
+                    KES {amt.toLocaleString()}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center text-sm">
+              <span className="text-slate-400">Speculative Payout Rate</span>
+              <span className="font-mono font-extrabold text-indigo-400 bg-indigo-500/5 px-2.5 py-1 rounded-md border border-indigo-500/10">3.2x Factor</span>
+            </div>
+
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center">
+              <span className="text-xs text-slate-400">Potential Gross Returns:</span>
+              <span className="text-lg font-mono font-bold text-emerald-400">KES {(wagerAmount * 3.2).toLocaleString()}</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button className="bg-emerald-500 hover:bg-emerald-600 active:scale-98 text-slate-950 font-bold py-3.5 rounded-xl text-xs flex flex-col items-center justify-center gap-0.5 tracking-wider uppercase transition-all shadow-lg shadow-emerald-500/10">
+                <span>▲ Rise / Call</span>
+              </button>
+              <button className="bg-rose-500 hover:bg-rose-600 active:scale-98 text-white font-bold py-3.5 rounded-xl text-xs flex flex-col items-center justify-center gap-0.5 tracking-wider uppercase transition-all shadow-lg shadow-rose-500/10">
+                <span>▼ Fall / Put</span>
               </button>
             </div>
+          </div>
+        )}
 
-            {/* DYNAMIC TRANSACTION INTERFACE SWITCHERS */}
-            {stkStatus === 'sending_stk' && (
-              <div className="py-8 text-center space-y-3">
-                <Loader2 className="w-10 h-10 text-indigo-500 mx-auto animate-spin" />
-                <p className="text-sm font-bold text-white">Opening Secure Gateway Link...</p>
+        {/* TAB 4: PORTFOLIO TERMINAL */}
+        {activeTab === 'portfolio' && (
+          <div className="space-y-4 animate-fadeIn">
+            <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-[11px] text-slate-400 uppercase font-bold tracking-wider">Total Portfolio Net Value</span>
+                <span className="text-[10px] bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-2 py-0.5 rounded font-bold uppercase">Registered Account</span>
               </div>
-            )}
+              <h2 className="text-2xl font-extrabold font-mono">KES {portfolioNetValue.toLocaleString()}.00</h2>
+              <p className="text-xs text-emerald-400 font-medium flex items-center gap-1">
+                <span>▲ +KES {portfolioProfitAllTime.toLocaleString()} ({portfolioProfitPercent}%)</span>
+                <span className="text-slate-500 text-[10px] ml-1">ALL TIME</span>
+              </p>
+            </div>
 
-            {stkStatus === 'awaiting_pin' && (
-              <div className="py-8 text-center space-y-2">
-                <Loader2 className="w-10 h-10 text-emerald-400 mx-auto安全 animate-pulse" />
-                <p className="text-sm font-bold text-white text-emerald-400">STK Prompt Sent Successfully!</p>
-                <p className="text-[11px] text-slate-400 max-w-xs mx-auto">Please input your secure M-Pesa pin code on your handset to authorize deployment assets.</p>
-              </div>
-            )}
-
-            {stkStatus === 'success' && (
-              <div className="py-8 text-center space-y-2">
-                <CheckCircle2 className="w-11 h-11 text-emerald-400 mx-auto" />
-                <p className="text-sm font-bold text-white">Transaction Confirmed</p>
-                <p className="text-[10px] text-slate-400">Astra balances have adjusted to reflect your funding operation.</p>
-              </div>
-            )}
-
-            {stkStatus === 'failed' && (
-              <div className="py-8 text-center space-y-2">
-                <XCircle className="w-11 h-11 text-rose-500 mx-auto" />
-                <p className="text-sm font-bold text-rose-400">Handshake Interrupted</p>
-                <p className="text-[10px] text-slate-400 font-mono bg-slate-950 p-2 rounded-lg border border-slate-900">{errorMessage}</p>
-                <button onClick={() => setStkStatus('idle')} className="mt-3 text-xs text-indigo-400 font-bold underline">Try Again</button>
-              </div>
-            )}
-
-            {stkStatus === 'idle' && (
-              <form onSubmit={handleMPesaSTKPush} className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">Safaricom Mobile Identity</label>
-                  <input 
-                    type="tel" 
-                    value={phoneNumber} 
-                    onChange={(e) => setPhoneNumber(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-900 rounded-xl px-4 py-3.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-all" 
-                    placeholder="254712345678"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1.5 tracking-wider">Asset Funding Capital (KSh)</label>
-                  <input 
-                    type="number" 
-                    value={transactionAmount} 
-                    onChange={(e) => setTransactionAmount(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-900 rounded-xl px-4 py-3.5 text-xs font-mono text-white focus:outline-none focus:border-indigo-500 transition-all" 
-                    placeholder="Min KSh 10"
-                  />
-                </div>
-                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-600 py-3.5 rounded-xl text-slate-950 font-black text-xs uppercase tracking-wider transition shadow-lg shadow-emerald-500/10">
-                  Initialize STK Push
+            <div className="flex gap-1 border-b border-slate-900 pb-px text-xs font-semibold overflow-x-auto whitespace-nowrap scrollbar-none">
+              {(['holdings', 'allocation', 'pnl', 'history'] as const).map((tab) => (
+                <button key={tab} onClick={() => setPortfolioTab(tab)} className={`py-2 px-3 border-b-2 capitalize transition-all ${portfolioTab === tab ? 'border-indigo-500 text-indigo-400 bg-indigo-500/5 rounded-t-lg' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                  {tab === 'history' ? 'Options History' : tab === 'pnl' ? 'Live PNL' : tab}
                 </button>
-              </form>
+              ))}
+            </div>
+
+            {portfolioTab === 'history' ? (
+              <div className="space-y-2">
+                {historicalContracts.map((item, index) => (
+                  <div key={index} className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold tracking-wide">{item.asset}</span>
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${item.type === 'CALL' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
+                            {item.type}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1 font-mono">{item.date}</p>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border font-mono ${item.status.includes('WON') || item.status.includes('WIN') ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20'}`}>
+                        🏆 {item.status}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-slate-800/60 flex justify-between items-center text-xs text-slate-400">
+                      <span>Stake: <strong className="text-white font-mono">KSh {item.stake.toLocaleString()}</strong></span>
+                      <span>Payout: <strong className="text-emerald-400 font-mono">KSh {item.payout.toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-slate-900/40 border border-dashed border-slate-800 rounded-xl p-8 text-center text-xs text-slate-500 font-mono">
+                Standard {portfolioTab.toUpperCase()} Grid Mapping Frame
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* FOOTER TAB SELECTOR CONTROLLER */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#060814]/95 backdrop-blur-md border-t border-slate-900 max-w-md mx-auto grid grid-cols-4 py-3.5 shadow-2xl">
-        {(['home', 'market', 'trade', 'portfolio'] as const).map((tab) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex flex-col items-center justify-center transition-all ${activeTab === tab ? 'text-indigo-400 scale-105 font-bold' : 'text-slate-500 hover:text-slate-400'}`}>
-            <span className="text-[10px] font-black uppercase tracking-widest">{tab}</span>
-          </button>
-        ))}
+        {/* TAB 5: SYSTEM APPLICATION SETTINGS */}
+        {activeTab === 'more' && (
+          <div className="space-y-4 animate-fadeIn">
+            <h3 className="text-sm font-bold text-slate-400 px-1 uppercase tracking-wider">Application Settings</h3>
+            
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400 text-sm">🤝</div>
+                <div>
+                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wide">Network Affiliate Rewards</h4>
+                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                    Receive <strong>KES 50.00</strong> directly whenever your code executes a funding cycle of KES 250+. Peers instantly unlock a <strong className="text-indigo-400">KES 20.00</strong> balance.
+                  </p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono font-bold text-slate-500 block uppercase">Personal Verification Token</span>
+                <div className="flex gap-1.5">
+                  <span className="font-mono text-xs font-bold bg-slate-950 px-3 py-1.5 rounded border border-slate-800 text-amber-400">ASTRA_MARK_742</span>
+                  <button className="bg-indigo-600 text-white px-3 py-1 text-[11px] font-bold rounded hover:bg-indigo-700">Share</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-900 rounded-xl border border-slate-800 divide-y divide-slate-800 text-xs font-medium">
+              <div className="p-4 flex justify-between items-center text-slate-300 hover:text-white cursor-pointer">
+                <span>Security Verification Config</span>
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+              </div>
+              <div className="p-4 flex justify-between items-center text-slate-300 hover:text-white cursor-pointer">
+                <span>Daraja API M-Pesa Integration Middleware</span>
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+              </div>
+              <div className="p-4 flex justify-between items-center text-slate-300 hover:text-white cursor-pointer">
+                <span>System Terms & Legal Declarations</span>
+                <ChevronRight className="w-4 h-4 text-slate-600" />
+              </div>
+              <div className="p-4 flex justify-between items-center text-rose-400 hover:text-rose-300 cursor-pointer">
+                <span>Terminate Profile Session Token</span>
+                <ChevronRight className="w-4 h-4 text-rose-900" />
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* FIXED BASE NAVIGATION TABBAR CONTROLLER */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-slate-950/90 backdrop-blur border-t border-slate-900 py-2.5 px-2 grid grid-cols-5 text-center text-[10px] font-bold tracking-wider uppercase text-slate-500 z-40">
+        <button onClick={() => setActiveTab('home')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'home' ? 'text-indigo-400 scale-105' : 'hover:text-white'}`}>
+          <Home className="w-4 h-4" /> <span>Home</span>
+        </button>
+        <button onClick={() => setActiveTab('market')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'market' ? 'text-indigo-400 scale-105' : 'hover:text-white'}`}>
+          <BarChart2 className="w-4 h-4" /> <span>Market</span>
+        </button>
+        <button onClick={() => setActiveTab('trade')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'trade' ? 'text-indigo-400 scale-105' : 'hover:text-white'}`}>
+          <Activity className="w-4 h-4" /> <span>Trade</span>
+        </button>
+        <button onClick={() => setActiveTab('portfolio')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'portfolio' ? 'text-indigo-400 scale-105' : 'hover:text-white'}`}>
+          <Clock className="w-4 h-4" /> <span>Portfolio</span>
+        </button>
+        <button onClick={() => setActiveTab('more')} className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'more' ? 'text-indigo-400 scale-105' : 'hover:text-white'}`}>
+          <User className="w-4 h-4" /> <span>More</span>
+        </button>
       </nav>
-    </div>
-  );
-        }
+
+      {/* M-PESA TERMINAL MODAL POPUP */}
+      {showMpesa && (
+        <div className="fixed inset-0 bg-slate-950/80 b
