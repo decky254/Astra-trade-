@@ -273,4 +273,47 @@ export default function App() {
             </div>
             <div className="bg-slate-950 border border-slate-900 rounded-xl divide-y divide-slate-900 text-xs font-semibold text-slate-300">
               <div className="p-4 flex justify-between items-center"><span>Security Config</span><ChevronRight className="w-4 h-4 text-slate-600" /></div>
-              <div onClick={() => setShowMpesa(true)} className="p-4 flex justify-between items-center cursor-pointer"><span>M-Pesa Middleware</
+              <div onClick={() => setShowMpesa(true)} className="p-4 flex justify-between items-center cursor-pointer"><span>M-Pesa Middleware</span><ChevronRight className="w-4 h-4 text-slate-600" /></div>
+            </div>
+          </div>
+        )}
+
+      </main>
+
+      {/* FOOTER NAVIGATION BAR */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-[#070b19]/90 backdrop-blur-md border-t border-slate-900/80 py-2.5 px-2 grid grid-cols-5 text-center text-[10px] font-black uppercase text-slate-500 z-40">
+        {[
+          { id: 'home', l: 'Home', icon: <Home className="w-4 h-4" /> },
+          { id: 'market', l: 'Market', icon: <BarChart2 className="w-4 h-4" /> },
+          { id: 'trade', l: 'Trade', icon: <Activity className="w-4 h-4" /> },
+          { id: 'portfolio', l: 'Portfolio', icon: <Clock className="w-4 h-4" /> },
+          { id: 'more', l: 'More', icon: <User className="w-4 h-4" /> }
+        ].map((tab) => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`flex flex-col items-center gap-1 ${activeTab === tab.id ? 'text-indigo-400' : ''}`}>
+            {tab.icon}
+            <span>{tab.l}</span>
+          </button>
+        ))}
+      </nav>
+
+      {/* MPESA MODAL */}
+      {showMpesa && (
+        <div className="fixed inset-0bg-slate-950/80 backdrop-blur-sm z-50 flex items-end justify-center p-4">
+          <div className="bg-[#070b19] border border-slate-800 rounded-2xl w-full max-w-sm p-1">
+            <div className="p-4 border-b border-slate-900/60 flex justify-between items-center text-xs font-bold">
+              <span className="flex items-center gap-2 text-emerald-400"><Smartphone className="w-4 h-4" /> M-Pesa Terminal Gateway</span>
+              <button onClick={() => setShowMpesa(false)}><X className="w-4 h-4 text-slate-400" /></button>
+            </div>
+            <div className="p-6 text-center space-y-4">
+              <div className="p-3.5 bg-slate-950 border border-slate-900 rounded-xl text-[10px] font-mono text-rose-400 text-left">
+                🚨 Handshake failed: Connection timed out at https://your-daraja-backend.up.railway.app/payments/stk-push
+              </div>
+              <button onClick={() => alert("Simulating Request Handshake...")} className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 font-bold text-xs py-3 rounded-xl uppercase tracking-wider">Retry Secure Push</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+                                                                                                                          }
