@@ -1,28 +1,15 @@
 import React, { useState } from 'react';
-import { 
-  TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, RefreshCw, 
-  Home, BarChart2, Activity, User, Clock, X, Smartphone, 
-  CheckCircle2, ChevronRight 
-} from 'lucide-react';
+import { Wallet, RefreshCw, Home, BarChart2, Activity, User, Clock, X, Smartphone, ChevronRight } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'market' | 'trade' | 'portfolio' | 'more'>('home');
-  const [portfolioTab, setPortfolioTab] = useState<'holdings' | 'pnl' | 'history'>('history');
   const [showMpesa, setShowMpesa] = useState(false);
   const [wagerAmount, setWagerAmount] = useState<number>(1000);
   const [mpesaError, setMpesaError] = useState<string | null>(null);
 
-  const walletBalance = 93943.56;
-  const portfolioNetValue = 2037.00;
-
   const markets = [
     { symbol: 'SCOM', name: 'Safaricom PLC', price: 18.85, change: 1.35, up: true },
     { symbol: 'V75', name: 'Volatility 75 Index', price: 145230.40, change: 4.22, up: true }
-  ];
-
-  const history = [
-    { asset: 'SCOM', type: 'CALL', stake: 1000, payout: 3200, status: 'WON', date: '31 May, 09:08' },
-    { asset: 'EQTY', type: 'PUT', stake: 500, payout: 0, status: 'LOSS', date: '31 May, 08:45' }
   ];
 
   const triggerStkPush = () => {
@@ -31,38 +18,35 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans max-w-md mx-auto relative pb-24 border-x border-slate-900 shadow-2xl">
-      
-      <header className="p-4 border-b border-slate-900 bg-slate-950/80 backdrop-blur sticky top-0 z-40 flex justify-between items-center">
+      <header className="p-4 border-b border-slate-900 bg-slate-950/80 sticky top-0 z-40 flex justify-between items-center">
         <div>
           <h1 className="text-xl font-bold tracking-tight">Astra Trade</h1>
-          <p className="text-[10px] text-indigo-400 font-mono tracking-widest uppercase">Secure Hub</p>
+          <p className="text-[10px] text-indigo-400 font-mono uppercase tracking-widest">Secure Hub</p>
         </div>
         <div className="w-9 h-9 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center font-bold text-indigo-400">DT</div>
       </header>
 
       <main className="p-4 space-y-4">
         {activeTab === 'home' && (
-          <div className="space-y-4">
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-6 rounded-2xl border border-indigo-500/10 space-y-4">
-              <div className="flex justify-between items-center text-slate-400 text-xs">
-                <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> M-Pesa Float</span>
-                <RefreshCw className="w-3.5 h-3.5" />
-              </div>
-              <h2 className="text-3xl font-extrabold">KSh {walletBalance.toLocaleString()}</h2>
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                <button onClick={() => setShowMpesa(true)} className="py-3 bg-indigo-600 rounded-xl text-xs font-semibold">Deposit</button>
-                <button onClick={() => setShowMpesa(true)} className="py-3 bg-slate-800 rounded-xl text-xs font-semibold">Withdraw</button>
-              </div>
+          <div className="bg-gradient-to-br from-slate-900 to-indigo-950 p-6 rounded-2xl border border-indigo-500/10 space-y-4">
+            <div className="flex justify-between items-center text-slate-400 text-xs">
+              <span className="flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" /> M-Pesa Balance</span>
+              <RefreshCw className="w-3.5 h-3.5" />
+            </div>
+            <h2 className="text-3xl font-extrabold">KSh 93,943.56</h2>
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button onClick={() => setShowMpesa(true)} className="py-3 bg-indigo-600 rounded-xl text-xs font-semibold">Deposit</button>
+              <button onClick={() => setShowMpesa(true)} className="py-3 bg-slate-800 rounded-xl text-xs font-semibold">Withdraw</button>
             </div>
           </div>
         )}
 
         {activeTab === 'market' && (
-          <div className="space-y-3">
+          <div className="space-y-2">
             {markets.map((m) => (
               <div key={m.symbol} onClick={() => setActiveTab('trade')} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center cursor-pointer">
                 <div><p className="font-bold">{m.symbol}</p><p className="text-[11px] text-slate-500">{m.name}</p></div>
-                <div className="text-right"><p className="font-mono font-bold">{m.price}</p><p className={`text-xs ${m.up ? 'text-emerald-400' : 'text-rose-400'}`}>{m.change}%</p></div>
+                <div className="text-right"><p className="font-mono font-bold">{m.price.toLocaleString()}</p><p className={`text-xs ${m.up ? 'text-emerald-400' : 'text-rose-400'}`}>{m.change}%</p></div>
               </div>
             ))}
           </div>
@@ -71,32 +55,28 @@ export default function App() {
         {activeTab === 'trade' && (
           <div className="space-y-4">
             <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-3">
-              <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Stake Amount</label>
+              <label className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">Wager Stake</label>
               <div className="relative">
                 <input type="number" value={wagerAmount} onChange={(e) => setWagerAmount(Number(e.target.value))} className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xl font-bold font-mono text-white" />
                 <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-slate-500 text-sm">KES</span>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <button className="bg-emerald-500 text-slate-950 font-bold py-4 rounded-xl text-xs uppercase">▲ Rise</button>
-              <button className="bg-rose-500 text-white font-bold py-4 rounded-xl text-xs uppercase">▼ Fall</button>
+              <button className="bg-emerald-500 text-slate-950 font-bold py-4 rounded-xl text-xs uppercase">▲ Rise / Call</button>
+              <button className="bg-rose-500 text-white font-bold py-4 rounded-xl text-xs uppercase">▼ Fall / Put</button>
             </div>
           </div>
         )}
 
         {activeTab === 'portfolio' && (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
               <span className="text-[11px] text-slate-400 uppercase font-bold">Net Value</span>
-              <h2 className="text-2xl font-extrabold font-mono">KES {portfolioNetValue.toLocaleString()}</h2>
+              <h2 className="text-2xl font-extrabold font-mono">KES 2,037.00</h2>
             </div>
-            <div className="space-y-2">
-              {history.map((h, i) => (
-                <div key={i} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                  <div><p className="font-bold">{h.asset} {h.type}</p><p className="text-slate-500">{h.date}</p></div>
-                  <div className="text-right font-mono"><p className={h.status === 'WON' ? 'text-emerald-400' : 'text-rose-400'}>{h.status}</p><p>KSh {h.payout}</p></div>
-                </div>
-              ))}
+            <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+              <div><p className="font-bold">SCOM CALL</p><p className="text-slate-500">31 May, 09:08</p></div>
+              <div className="text-right font-mono text-emerald-400"><p>WON</p><p>KSh 3,200</p></div>
             </div>
           </div>
         )}
@@ -128,7 +108,7 @@ export default function App() {
               {mpesaError ? (
                 <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 text-[10px] font-mono text-rose-400">{mpesaError}</div>
               ) : (
-                <p className="text-xs text-slate-400">Requesting instant payment push securely.</p>
+                <p className="text-xs text-slate-400">Ready to request secure STK push.</p>
               )}
               <button onClick={triggerStkPush} className="w-full bg-indigo-600 py-3 rounded-xl text-xs font-bold">Send STK Push</button>
             </div>
